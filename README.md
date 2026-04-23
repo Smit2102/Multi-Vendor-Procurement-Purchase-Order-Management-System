@@ -59,10 +59,20 @@ This system digitizes and streamlines this entire pipeline with role-based acces
 | 📈 **Chart.js Visualizations** | Interactive doughnut and pie charts for budget analysis and order pipeline |
 | 💰 **Budget Tracking** | Real-time department budget allocation, usage, and remaining balance |
 | 📝 **Full Audit Trail** | Every action logged with timestamp (Central Time), user, IP address |
-| 🗑️ **Admin Log Management** | Super Admin can clear logs individually or wipe all at once |
 | 🎨 **Premium Dark UI** | Glassmorphism cards, gradient backgrounds, animated blobs, hover effects |
 | ☁️ **Vercel Deployment** | Live serverless deployment with automatic GitHub CI/CD |
-| 📱 **Responsive Design** | Works on desktop, tablet, and mobile screens |
+| 📱 **Responsive Design** | Fluid clamp typography, stacking flexbox forms, and scrollable data tables for perfect mobile viewing |
+
+---
+
+## 🚀 Latest Improvements (v2.0)
+
+We have recently completed a major update to perfectly simulate real-world conditions:
+- **Strict Budget Constraints**: Managers are now blocked from approving requests if the department doesn't have sufficient remaining budget.
+- **Flawless State Machine**: `PR_Status_History` is now updated correctly on all 5 state transitions of the workflow (Pending → Approved → PO Issued → Shipped → Invoiced → Paid).
+- **Correct Stock Receiving**: The Goods Receipt logic was fixed to pull the actual requested quantity from the linked Purchase Request dynamically during receiving.
+- **Accurate Audit Counters**: The Admin audit log now correctly summarizes the *true* total number of events instead of maxing out at API limits.
+- **Perfectly Responsive UI**: Re-engineered all components using fluid `clamp()` functions, flexbox row wrapping (`po-form-row`, `pay-form-row`), and mobile-responsive scrollable tables. Fully tested across 992px, 768px, and 480px breakpoints.
 
 ---
 
