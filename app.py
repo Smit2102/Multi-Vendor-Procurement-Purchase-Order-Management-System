@@ -212,8 +212,8 @@ def dashboard():
         if vendor_info:
             data['pos'] = conn.execute('SELECT * FROM Purchase_Orders WHERE vendor_id = ?', (vendor_info['vendor_id'],)).fetchall()
         data['kpi_open'] = len(data['pos'])
-        # FIX REC 7/8: Status is 'PO_ISSUED' not 'ISSUED'
-        data['kpi_to_ship'] = sum(1 for p in data['pos'] if p['status'] == 'PO_ISSUED')
+        # VENDOR FIX: Status is 'ISSUED' in the Purchase_Orders table
+        data['kpi_to_ship'] = sum(1 for p in data['pos'] if p['status'] == 'ISSUED')
         data['kpi_value'] = sum(p['total_amount'] for p in data['pos'])
 
     elif current_user.role_name == 'Finance':

@@ -305,10 +305,10 @@
           <tr>
             <td class="fw-bold text-info">{{ "PO-%04d" % po.po_id }}</td>
             <td>${{ "%.2f"|format(po.total_amount) }}</td>
-            <td class="{% if po.status == 'PO_ISSUED' %}text-warning{% endif %}">{{ po.delivery_due_date }}</td>
+            <td class="{% if po.status == 'ISSUED' %}text-warning{% endif %}">{{ po.delivery_due_date }}</td>
             <td>{{ status_badge(po.status) }}</td>
             <td>
-              {% if po.status == 'PO_ISSUED' %}
+              {% if po.status == 'ISSUED' %}
               <form action="{{ url_for('vendor_ship', po_id=po.po_id) }}" method="POST">
                 <button type="submit" class="btn btn-sm btn-success">Mark Shipped</button>
               </form>
