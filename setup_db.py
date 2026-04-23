@@ -270,8 +270,9 @@ def create_database():
     for r in roles:
         execute_query("INSERT INTO Roles (role_name) VALUES (?)", (r,))
     
-    # Insert Default Department
-    execute_query("INSERT INTO Departments (dept_name, budget_allocated, budget_used, manager_id) VALUES ('IT Department', 100000, 0, 2)")
+    # FIX REC 13: Insert Department WITHOUT manager_id to avoid FK violation
+    # (Manager user doesn't exist yet at this point)
+    execute_query("INSERT INTO Departments (dept_name, budget_allocated, budget_used) VALUES ('IT Department', 100000, 0)")
 
     # Insert Default Users so they can log in 
     users = [
@@ -284,6 +285,9 @@ def create_database():
     ]
     for uid, u in enumerate(users):
         execute_query("INSERT INTO Users (name, email, role, department_id) VALUES (?, ?, ?, ?)", u)
+
+    # FIX REC 13: NOW update manager_id — user_id=2 (Manager) exists at this point
+    execute_query("UPDATE Departments SET manager_id = 2 WHERE dept_name = 'IT Department'")
         
     # Insert a Dummy Vendor entry for the Vendor user
     execute_query("INSERT INTO Vendors (company_name, contact_name, email, phone, address, rating) VALUES ('Tech Supplies Inc', 'Alice', 'vendor@test.com', '123-456', '123 Main st', 5)")

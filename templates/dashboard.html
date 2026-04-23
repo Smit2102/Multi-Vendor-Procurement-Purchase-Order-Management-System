@@ -2,589 +2,580 @@
 
 {% block content %}
 
-<!-- Shared Status Badge Macro -->
+{# ── Status Badge Macro – covers all 7 states ── #}
 {% macro status_badge(status) %}
-{% if status == 'PENDING' %}
-<span class="badge badge-pending">PENDING</span>
-{% elif status == 'APPROVED' %}
-<span class="badge badge-approved">APPROVED</span>
-{% elif status == 'REJECTED' %}
-<span class="badge badge-rejected">REJECTED</span>
-{% else %}
-<span class="badge bg-secondary">{{ status }}</span>
-{% endif %}
+  {% if status == 'PENDING' %}<span class="badge" style="background:#6c757d">PENDING</span>
+  {% elif status == 'APPROVED' %}<span class="badge" style="background:#10b981">APPROVED</span>
+  {% elif status == 'REJECTED' %}<span class="badge" style="background:#ef4444">REJECTED</span>
+  {% elif status == 'PO_ISSUED' %}<span class="badge" style="background:#3b82f6">PO_ISSUED</span>
+  {% elif status == 'SHIPPED' %}<span class="badge" style="background:#f59e0b;color:#000">SHIPPED</span>
+  {% elif status == 'INVOICED' %}<span class="badge" style="background:#8b5cf6">INVOICED</span>
+  {% elif status == 'PAID' %}<span class="badge" style="background:#059669">PAID</span>
+  {% else %}<span class="badge bg-secondary">{{ status }}</span>
+  {% endif %}
 {% endmacro %}
 
-<!-- Employee Dashboard -->
+
+{# ═══════════════════════ EMPLOYEE ═══════════════════════ #}
 {% if current_user.role_name == 'Employee' %}
-<div class="row">
-    <div class="col-lg-3 mb-4">
-        <div class="glass-card h-100">
-            <h5 class="mb-4 text-white">New Request</h5>
-            <form action="{{ url_for('submit_pr') }}" method="POST">
-                <div class="mb-3">
-                    <label class="form-label text-muted small">Item Name</label>
-                    <input type="text" name="item_name" class="form-control form-control-sm" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label text-muted small">Quantity</label>
-                    <input type="number" name="quantity" class="form-control form-control-sm" required min="1">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label text-muted small">Est. Cost (per unit)</label>
-                    <input type="number" step="0.01" name="cost" class="form-control form-control-sm" required>
-                </div>
-                <div class="mb-4">
-                    <label class="form-label text-muted small">Justification</label>
-                    <textarea name="description" class="form-control form-control-sm" rows="2" required></textarea>
-                </div>
-                <button type="submit" class="btn btn-primary w-100 py-2">Submit</button>
-            </form>
-        </div>
-    </div>
 
-    <div class="col-lg-6 mb-4">
-        <div class="glass-card h-100">
-            <h4 class="mb-4 text-white">Your Request History</h4>
-            <div class="table-responsive" style="max-height: 400px;">
-                <table class="table table-hover text-white align-middle">
-                    <thead>
-                        <tr>
-                            <th>PR #</th>
-                            <th>Item</th>
-                            <th>Est. Total</th>
-                            <th>Status</th>
-                            <th>Date</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for req in data.requests %}
-                        <tr>
-                            <td>PR-100{{ req.pr_id }}</td>
-                            <td class="fw-bold">{{ req.item_name }} <span class="text-muted fw-normal">(x{{ req.quantity
-                                    }})</span></td>
-                            <td>${{ "%.2f"|format(req.estimated_cost * req.quantity) }}</td>
-                            <td>{{ status_badge(req.status) }}</td>
-                            <td class="text-muted small">{{ req.created_at.strftime('%Y-%m-%d') if req.created_at is not
-                                string else req.created_at[:10] }}</td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="5" class="text-center text-muted py-4">No requests found.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+{# --- KPI Cards --- #}
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="glass-card text-center p-3">
+      <div class="text-muted text-uppercase small fw-bold">Total Submitted</div>
+      <div class="display-5 text-white fw-bold mt-2">{{ data.kpi_total }}</div>
     </div>
-
-    <div class="col-lg-3 mb-4">
-        <div class="glass-card h-100">
-            <h5 class="mb-4 text-white">Request Analytics</h5>
-            <canvas id="empChart"></canvas>
-            <script>
-                // Calculate counts in JS to avoid dirty jinja logic
-                const reqStatuses = { 'PENDING': 0, 'APPROVED': 0, 'REJECTED': 0 };
-                {% for r in data.requests %}
-                if (reqStatuses['{{ r.status }}'] !== undefined) {
-                    reqStatuses['{{ r.status }}']++;
-                }
-                {% endfor %}
-
-                const ctxEmp = document.getElementById('empChart').getContext('2d');
-                new Chart(ctxEmp, {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['Pending', 'Approved', 'Rejected'],
-                        datasets: [{
-                            data: [reqStatuses.PENDING, reqStatuses.APPROVED, reqStatuses.REJECTED],
-                            backgroundColor: ['#6c757d', '#10b981', '#ef4444'],
-                            borderWidth: 0
-                        }]
-                    },
-                    options: { plugins: { legend: { labels: { color: 'white' } } } }
-                });
-            </script>
-        </div>
+  </div>
+  <div class="col-md-3">
+    <div class="glass-card text-center p-3">
+      <div class="text-muted text-uppercase small fw-bold">Pending Review</div>
+      <div class="display-5 text-warning fw-bold mt-2">{{ data.kpi_pending }}</div>
     </div>
+  </div>
+  <div class="col-md-3">
+    <div class="glass-card text-center p-3">
+      <div class="text-muted text-uppercase small fw-bold">Approved / In Progress</div>
+      <div class="display-5 text-success fw-bold mt-2">{{ data.kpi_approved }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="glass-card text-center p-3">
+      <div class="text-muted text-uppercase small fw-bold">Rejected</div>
+      <div class="display-5 text-danger fw-bold mt-2">{{ data.kpi_rejected }}</div>
+    </div>
+  </div>
 </div>
 
-<!-- Manager Dashboard -->
+{# --- Main Row --- #}
+<div class="row">
+  <div class="col-lg-3 mb-4">
+    <div class="glass-card h-100">
+      <h5 class="mb-4 text-white">New Request</h5>
+      <form action="{{ url_for('submit_pr') }}" method="POST">
+        <div class="mb-3"><label class="form-label text-muted small">Item Name</label>
+          <input type="text" name="item_name" class="form-control form-control-sm" required></div>
+        <div class="mb-3"><label class="form-label text-muted small">Quantity</label>
+          <input type="number" name="quantity" class="form-control form-control-sm" required min="1"></div>
+        <div class="mb-3"><label class="form-label text-muted small">Est. Cost (per unit)</label>
+          <input type="number" step="0.01" name="cost" class="form-control form-control-sm" required></div>
+        <div class="mb-4"><label class="form-label text-muted small">Justification</label>
+          <textarea name="description" class="form-control form-control-sm" rows="2" required></textarea></div>
+        <button type="submit" class="btn btn-primary w-100 py-2">Submit</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-6 mb-4">
+    <div class="glass-card h-100">
+      <h4 class="mb-4 text-white">Your Request History</h4>
+      <div class="table-responsive" style="max-height:420px;">
+        <table class="table table-hover text-white align-middle">
+          <thead><tr><th>PR #</th><th>Item</th><th>Est. Total</th><th>Status</th><th>Date</th></tr></thead>
+          <tbody>
+            {% for req in data.requests %}
+            <tr>
+              <td class="fw-bold text-info">{{ "PR-%04d" % req.pr_id }}</td>
+              <td class="fw-bold">{{ req.item_name }} <span class="text-muted fw-normal">(x{{ req.quantity }})</span></td>
+              <td>${{ "%.2f"|format(req.estimated_cost * req.quantity) }}</td>
+              <td>{{ status_badge(req.status) }}</td>
+              <td class="text-muted small">{{ req.created_at.strftime('%Y-%m-%d') if req.created_at is not string else req.created_at[:10] }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-center text-muted py-4">No requests yet. Submit your first one!</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3 mb-4">
+    <div class="glass-card h-100">
+      <h5 class="mb-3 text-white">Request Breakdown</h5>
+      <canvas id="empChart"></canvas>
+      <script>
+        {# FIX BUG 4: Track ALL statuses dynamically — not just 3 hardcoded ones #}
+        const statusMap = {};
+        {% for r in data.requests %}
+        statusMap['{{ r.status }}'] = (statusMap['{{ r.status }}'] || 0) + 1;
+        {% endfor %}
+        const empLabels = Object.keys(statusMap);
+        const empValues = Object.values(statusMap);
+        const colorMap = {
+          'PENDING':'#6c757d','APPROVED':'#10b981','REJECTED':'#ef4444',
+          'PO_ISSUED':'#3b82f6','SHIPPED':'#f59e0b','INVOICED':'#8b5cf6','PAID':'#059669'
+        };
+        const empColors = empLabels.map(l => colorMap[l] || '#94a3b8');
+        new Chart(document.getElementById('empChart').getContext('2d'), {
+          type: 'doughnut',
+          data: { labels: empLabels, datasets: [{ data: empValues, backgroundColor: empColors, borderWidth: 0 }] },
+          options: { plugins: { legend: { labels: { color: 'white', font: { size: 11 } } } } }
+        });
+      </script>
+    </div>
+  </div>
+</div>
+
+
+{# ═══════════════════════ MANAGER ═══════════════════════ #}
 {% elif current_user.role_name == 'Manager' %}
 <div class="row">
-    <!-- Manager KPIs -->
-    <div class="col-12 mb-4">
-        <div class="row g-3">
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Pending Approvals</div>
-                    <div class="display-6 text-white fw-bold mt-2">{{ data.kpi_pending }}</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Total Budget</div>
-                    <div class="display-6 text-success fw-bold mt-2">${{ "{:,.0f}".format(data.kpi_budget_total) }}
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Budget Used</div>
-                    <div class="display-6 text-danger fw-bold mt-2">${{ "{:,.0f}".format(data.kpi_budget_used) }}</div>
-                </div>
-            </div>
+  <div class="col-12 mb-4">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Pending Approvals</div>
+          <div class="display-5 text-white fw-bold mt-2">{{ data.kpi_pending }}</div>
         </div>
+      </div>
+      <div class="col-md-4">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Total Budget</div>
+          <div class="display-5 text-success fw-bold mt-2">${{ "{:,.0f}".format(data.kpi_budget_total) }}</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Budget Used</div>
+          <div class="display-5 text-danger fw-bold mt-2">${{ "{:,.0f}".format(data.kpi_budget_used) }}</div>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <div class="col-lg-4 mb-4">
-        <div class="glass-card text-center py-5">
-            <h2 class="display-5 text-white fw-bold mb-0">${{ "%.2f"|format(data.dept.budget_allocated -
-                data.dept.budget_used) }}</h2>
-            <p class="text-muted mt-2">Remaining Department Budget</p>
-            <div class="progress mt-4 bg-dark" style="height: 8px;">
-                {% set pct = (data.dept.budget_used / data.dept.budget_allocated) * 100 %}
-                <div class="progress-bar bg-info" style="width:{{ pct }}%"></div>
-            </div>
-            <p class="small text-muted mt-2">${{ "%.2f"|format(data.dept.budget_used) }} used of ${{
-                "%.2f"|format(data.dept.budget_allocated) }}</p>
-        </div>
+  <div class="col-lg-4 mb-4">
+    <div class="glass-card text-center py-5">
+      <h2 class="display-5 text-white fw-bold mb-0">${{ "%.2f"|format(data.dept.budget_allocated - data.dept.budget_used) }}</h2>
+      <p class="text-muted mt-2">Remaining Department Budget</p>
+      <div class="progress mt-4 bg-dark" style="height:10px;">
+        {% set pct = ((data.dept.budget_used / data.dept.budget_allocated) * 100) if data.dept.budget_allocated > 0 else 0 %}
+        <div class="progress-bar {% if pct > 80 %}bg-danger{% elif pct > 50 %}bg-warning{% else %}bg-info{% endif %}" style="width:{{ pct }}%"></div>
+      </div>
+      <p class="small text-muted mt-2">${{ "%.2f"|format(data.dept.budget_used) }} used of ${{ "%.2f"|format(data.dept.budget_allocated) }}</p>
     </div>
+  </div>
 
-    <div class="col-lg-8 mb-4">
-        <div class="glass-card min-vh-50">
-            <h4 class="mb-4 text-white">Pending Team Approvals</h4>
-            <div class="table-responsive">
-                <table class="table text-white align-middle">
-                    <thead>
-                        <tr>
-                            <th>Req ID</th>
-                            <th>Item</th>
-                            <th>Est. Cost</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for r in data.pending_requests %}
-                        <tr>
-                            <td>PR-100{{ r.pr_id }}</td>
-                            <td>
-                                <strong>{{ r.item_name }}</strong> (x{{ r.quantity }})<br>
-                                <small class="text-muted">{{ r.description }}</small>
-                            </td>
-                            <td>${{ "%.2f"|format(r.estimated_cost * r.quantity) }}</td>
-                            <td>
-                                <form action="{{ url_for('approve_pr', pr_id=r.pr_id) }}" method="POST"
-                                    class="d-flex gap-2">
-                                    <input type="text" name="comments" class="form-control form-control-sm"
-                                        placeholder="Review comment" required>
-                                    <button type="submit" name="decision" value="APPROVED"
-                                        class="btn btn-sm btn-success px-3">Approve</button>
-                                    <button type="submit" name="decision" value="REJECTED"
-                                        class="btn btn-sm btn-outline-danger px-3">Reject</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="4" class="text-center text-muted py-4">You have zero pending approvals.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+  <div class="col-lg-8 mb-4">
+    <div class="glass-card">
+      <h4 class="mb-4 text-white">Pending Team Approvals</h4>
+      <div class="table-responsive">
+        <table class="table text-white align-middle">
+          <thead><tr><th>Req ID</th><th>Item</th><th>Est. Cost</th><th>Action</th></tr></thead>
+          <tbody>
+            {% for r in data.pending_requests %}
+            <tr>
+              <td class="fw-bold text-info">{{ "PR-%04d" % r.pr_id }}</td>
+              <td><strong>{{ r.item_name }}</strong> (x{{ r.quantity }})<br><small class="text-muted">{{ r.description }}</small></td>
+              <td>${{ "%.2f"|format(r.estimated_cost * r.quantity) }}</td>
+              <td>
+                <form action="{{ url_for('approve_pr', pr_id=r.pr_id) }}" method="POST" class="d-flex gap-2">
+                  <input type="text" name="comments" class="form-control form-control-sm" placeholder="Review comment" required>
+                  <button type="submit" name="decision" value="APPROVED" class="btn btn-sm btn-success px-3">Approve</button>
+                  <button type="submit" name="decision" value="REJECTED" class="btn btn-sm btn-outline-danger px-3">Reject</button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-center text-muted py-4">You have zero pending approvals.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
+  </div>
 </div>
 
-<!-- Procurement Dashboard -->
+
+{# ═══════════════════════ PROCUREMENT ═══════════════════════ #}
 {% elif current_user.role_name == 'Procurement' %}
 <div class="row">
-    <!-- Procurement KPIs -->
-    <div class="col-12 mb-4">
-        <div class="row g-3">
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Requests To Issue</div>
-                    <div class="display-6 text-info fw-bold mt-2">{{ data.kpi_to_issue }}</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Active Pipeline</div>
-                    <div class="display-6 text-success fw-bold mt-2">{{ data.kpi_active }}</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Total Pipeline Value</div>
-                    <div class="display-6 text-warning fw-bold mt-2">${{ "{:,.0f}".format(data.kpi_value) }}</div>
-                </div>
-            </div>
+  <div class="col-12 mb-4">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Requests To Issue</div>
+          <div class="display-5 text-info fw-bold mt-2">{{ data.kpi_to_issue }}</div>
         </div>
-    </div>
-
-    <div class="col-lg-12 mb-4">
-        <div class="glass-card">
-            <h4 class="mb-4 text-white">Ready for PO Generation</h4>
-            <div class="table-responsive">
-                <table class="table text-white align-middle">
-                    <thead>
-                        <tr>
-                            <th>PR ID</th>
-                            <th>Item Request</th>
-                            <th>Generate Document</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for r in data.approved_requests %}
-                        <tr>
-                            <td>PR-100{{ r.pr_id }}</td>
-                            <td><strong>{{ r.item_name }}</strong><br><small class="text-muted">Qty: {{ r.quantity }} |
-                                    Est: ${{ "%.2f"|format(r.estimated_cost * r.quantity) }}</small></td>
-                            <td>
-                                <form action="{{ url_for('generate_po') }}" method="POST"
-                                    class="d-flex gap-3 align-items-center">
-                                    <input type="hidden" name="pr_id" value="{{ r.pr_id }}">
-                                    <select class="form-select" name="vendor_id" required>
-                                        <option value="" selected disabled>Select Vendor</option>
-                                        {% for v in data.vendors %}
-                                        <option value="{{ v.vendor_id }}">{{ v.company_name }} (★{{ v.rating }})
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                    <input type="date" class="form-control" name="delivery_date" required>
-                                    <button type="submit" class="btn btn-primary text-nowrap">Issue PO</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="3" class="text-center text-muted py-4">All approved requests have been
-                                processed.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+      </div>
+      <div class="col-md-4">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Active Pipeline</div>
+          <div class="display-5 text-success fw-bold mt-2">{{ data.kpi_active }}</div>
         </div>
+      </div>
+      <div class="col-md-4">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Total Pipeline Value</div>
+          <div class="display-5 text-warning fw-bold mt-2">${{ "{:,.0f}".format(data.kpi_value) }}</div>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <!-- Active POs -->
-    <div class="col-lg-12 mb-4">
-        <div class="glass-card">
-            <h4 class="mb-4 text-white">Active Purchase Orders Pipeline</h4>
-            <table class="table text-white my-0 align-middle">
-                <thead>
-                    <tr>
-                        <th>PO Number</th>
-                        <th>Vendor</th>
-                        <th>Value</th>
-                        <th>Due Date</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for po in data.pos %}
-                    <tr>
-                        <td class="fw-bold text-info">PO-200{{ po.po_id }}</td>
-                        <td>{{ po.company_name }}</td>
-                        <td>${{ "%.2f"|format(po.total_amount) }}</td>
-                        <td>{{ po.delivery_due_date }}</td>
-                        <td><span class="badge bg-secondary">{{ po.status }}</span></td>
-                    </tr>
+  <div class="col-lg-12 mb-4">
+    <div class="glass-card">
+      <h4 class="mb-4 text-white">Ready for PO Generation</h4>
+      <div class="table-responsive">
+        <table class="table text-white align-middle">
+          <thead><tr><th>PR ID</th><th>Item Request</th><th>Generate Document</th></tr></thead>
+          <tbody>
+            {% for r in data.approved_requests %}
+            <tr>
+              <td class="fw-bold text-info">{{ "PR-%04d" % r.pr_id }}</td>
+              <td><strong>{{ r.item_name }}</strong><br><small class="text-muted">Qty: {{ r.quantity }} | Est: ${{ "%.2f"|format(r.estimated_cost * r.quantity) }}</small></td>
+              <td>
+                <form action="{{ url_for('generate_po') }}" method="POST" class="po-form-row">
+                  <input type="hidden" name="pr_id" value="{{ r.pr_id }}">
+                  <select class="form-select" name="vendor_id" required>
+                    <option value="" selected disabled>Select Vendor</option>
+                    {% for v in data.vendors %}
+                    <option value="{{ v.vendor_id }}">{{ v.company_name }} (★{{ v.rating }})</option>
                     {% endfor %}
-                </tbody>
-            </table>
-        </div>
+                  </select>
+                  <input type="date" class="form-control" name="delivery_date" required>
+                  <button type="submit" class="btn btn-primary text-nowrap">Issue PO</button>
+                </form>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-center text-muted py-4">All approved requests have been processed.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
+  </div>
+
+  <div class="col-lg-12 mb-4">
+    <div class="glass-card">
+      <h4 class="mb-4 text-white">Active Purchase Orders Pipeline</h4>
+      <table class="table text-white my-0 align-middle">
+        <thead><tr><th>PO Number</th><th>Vendor</th><th>Value</th><th>Due Date</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for po in data.pos %}
+          <tr>
+            <td class="fw-bold text-info">{{ "PO-%04d" % po.po_id }}</td>
+            <td>{{ po.company_name }}</td>
+            <td>${{ "%.2f"|format(po.total_amount) }}</td>
+            <td>{{ po.delivery_due_date }}</td>
+            <td>{{ status_badge(po.status) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
-<!-- Vendor Dashboard -->
+
+{# ═══════════════════════ VENDOR ═══════════════════════ #}
 {% elif current_user.role_name == 'Vendor' %}
 <div class="row justify-content-center">
-    <!-- Vendor KPIs -->
-    <div class="col-lg-10 mb-4">
-        <div class="row g-3">
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Total Orders</div>
-                    <div class="display-6 text-white fw-bold mt-2">{{ data.kpi_open }}</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Pending Shipment</div>
-                    <div class="display-6 text-warning fw-bold mt-2">{{ data.kpi_to_ship }}</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Contracted Value</div>
-                    <div class="display-6 text-success fw-bold mt-2">${{ "{:,.0f}".format(data.kpi_value) }}</div>
-                </div>
-            </div>
+  <div class="col-lg-10 mb-4">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Total Orders</div>
+          <div class="display-5 text-white fw-bold mt-2">{{ data.kpi_open }}</div>
         </div>
+      </div>
+      <div class="col-md-4">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Pending Shipment</div>
+          <div class="display-5 text-warning fw-bold mt-2">{{ data.kpi_to_ship }}</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Contracted Value</div>
+          <div class="display-5 text-success fw-bold mt-2">${{ "{:,.0f}".format(data.kpi_value) }}</div>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <div class="col-lg-10 mb-4">
-        <div class="glass-card">
-            <h4 class="mb-4 text-white">Vendor Portal: Open Orders</h4>
-            <table class="table text-white align-middle">
-                <thead>
-                    <tr>
-                        <th>Order #</th>
-                        <th>Value</th>
-                        <th>Delivery Due</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for po in data.pos %}
-                    <tr>
-                        <td class="fw-bold text-info">PO-200{{ po.po_id }}</td>
-                        <td>${{ "%.2f"|format(po.total_amount) }}</td>
-                        <td class="{% if po.status == 'ISSUED' %}text-warning{% endif %}">{{ po.delivery_due_date }}
-                        </td>
-                        <td><span class="badge bg-primary">{{ po.status }}</span></td>
-                        <td>
-                            {% if po.status == 'ISSUED' %}
-                            <form action="{{ url_for('vendor_ship', po_id=po.po_id) }}" method="POST">
-                                <button type="submit" class="btn btn-sm btn-success">Mark Shipped</button>
-                            </form>
-                            {% else %}
-                            <span class="text-muted small">Update Complete</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="5" class="text-center text-muted py-4">No orders assigned to your company.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+  <div class="col-lg-10 mb-4">
+    <div class="glass-card">
+      <h4 class="mb-4 text-white">Vendor Portal: Open Orders</h4>
+      <table class="table text-white align-middle">
+        <thead><tr><th>Order #</th><th>Value</th><th>Delivery Due</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          {% for po in data.pos %}
+          <tr>
+            <td class="fw-bold text-info">{{ "PO-%04d" % po.po_id }}</td>
+            <td>${{ "%.2f"|format(po.total_amount) }}</td>
+            <td class="{% if po.status == 'PO_ISSUED' %}text-warning{% endif %}">{{ po.delivery_due_date }}</td>
+            <td>{{ status_badge(po.status) }}</td>
+            <td>
+              {% if po.status == 'PO_ISSUED' %}
+              <form action="{{ url_for('vendor_ship', po_id=po.po_id) }}" method="POST">
+                <button type="submit" class="btn btn-sm btn-success">Mark Shipped</button>
+              </form>
+              {% else %}
+              <span class="text-muted small">Update Complete</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-4">No orders assigned to your company.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
+  </div>
 </div>
 
-<!-- Finance -->
+
+{# ═══════════════════════ FINANCE ═══════════════════════ #}
 {% elif current_user.role_name == 'Finance' %}
 <div class="row">
-    <!-- Finance KPIs -->
-    <div class="col-12 mb-4">
-        <div class="row g-3">
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Ready for Invoice</div>
-                    <div class="display-6 text-info fw-bold mt-2">{{ data.kpi_ready }}</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Unpaid Invoices</div>
-                    <div class="display-6 text-warning fw-bold mt-2">{{ data.kpi_unpaid }}</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Capital Paid Out</div>
-                    <div class="display-6 text-success fw-bold mt-2">${{ "{:,.0f}".format(data.kpi_paid_amt) }}</div>
-                </div>
-            </div>
+  <div class="col-12 mb-4">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Ready for Invoice</div>
+          <div class="display-5 text-info fw-bold mt-2">{{ data.kpi_ready }}</div>
         </div>
+      </div>
+      <div class="col-md-4">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Unpaid Invoices</div>
+          <div class="display-5 text-warning fw-bold mt-2">{{ data.kpi_unpaid }}</div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Capital Paid Out</div>
+          <div class="display-5 text-success fw-bold mt-2">${{ "{:,.0f}".format(data.kpi_paid_amt) }}</div>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <div class="col-lg-6 mb-4">
-        <div class="glass-card h-100">
-            <h4 class="mb-4 text-white">Pending Goods Receipts</h4>
-            <p class="text-muted small mb-4">Invoice items that have shipped.</p>
-            <table class="table text-white align-middle">
-                <thead>
-                    <tr>
-                        <th>Receipt ID</th>
-                        <th>PO Ref</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for del in data.deliveries %}
-                    <tr>
-                        <td>GR-500{{ del.gr_id }}</td>
-                        <td>PO-200{{ del.po_id }}</td>
-                        <td>
-                            <form action="{{ url_for('finance_invoice') }}" method="POST">
-                                <input type="hidden" name="po_id" value="{{ del.po_id }}">
-                                <button type="submit" class="btn btn-sm btn-primary">Process Invoice</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="3" class="text-center text-muted">No pending receipts to invoice.</td>
-                    </tr>
-                    {% endfor %}
-                    <!-- For demo purposes, we can show raw POs ready to be invoiced if they are SHIPPED -->
-                    {% if data.deliveries|length == 0 %}
-                    <tr>
-                        <td colspan="3" class="text-center text-muted">
-                            <em>(Wait for Vendor to MARK SHIPPED)</em>
-                        </td>
-                    </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
+  {# Goods Receipts #}
+  <div class="col-lg-3 mb-4">
+    <div class="glass-card h-100">
+      <h5 class="mb-3 text-white">Pending Goods Receipts</h5>
+      <p class="text-muted small mb-3">Items shipped – ready to invoice.</p>
+      <table class="table text-white align-middle">
+        <thead><tr><th>Receipt</th><th>PO Ref</th><th>Action</th></tr></thead>
+        <tbody>
+          {% for del in data.deliveries %}
+          <tr>
+            <td>{{ "GR-%04d" % del.gr_id }}</td>
+            <td>{{ "PO-%04d" % del.po_id }}</td>
+            <td>
+              <form action="{{ url_for('finance_invoice') }}" method="POST">
+                <input type="hidden" name="po_id" value="{{ del.po_id }}">
+                <button type="submit" class="btn btn-sm btn-primary">Process Invoice</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="text-center text-muted small py-3">(Wait for Vendor to Mark Shipped)</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
+  </div>
 
-    <div class="col-lg-6 mb-4">
-        <div class="glass-card h-100">
-            <h4 class="mb-4 text-white">Accounts Payable</h4>
-            <table class="table text-white align-middle">
-                <thead>
-                    <tr>
-                        <th>INV #</th>
-                        <th>PO Ref</th>
-                        <th>Amount</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for inv in data.invoices %}
-                    <tr>
-                        <td>INV-900{{ inv.invoice_id }}</td>
-                        <td>PO-200{{ inv.po_id }}</td>
-                        <td class="fw-bold">${{ "%.2f"|format(inv.amount) }}</td>
-                        <td><span class="badge bg-secondary">{{ inv.status }}</span></td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="4" class="text-center text-muted">No invoices recorded.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+  {# Accounts Payable + FIX BUG 2: Pay Now button #}
+  <div class="col-lg-6 mb-4">
+    <div class="glass-card h-100">
+      <h4 class="mb-4 text-white">Accounts Payable</h4>
+      <table class="table text-white align-middle">
+        <thead><tr><th>INV #</th><th>PO Ref</th><th>Amount</th><th>Status</th><th>Payment</th></tr></thead>
+        <tbody>
+          {% for inv in data.invoices %}
+          <tr>
+            <td class="text-info fw-bold">{{ "INV-%04d" % inv.invoice_id }}</td>
+            <td>{{ "PO-%04d" % inv.po_id }}</td>
+            <td class="fw-bold">${{ "%.2f"|format(inv.amount) }}</td>
+            <td>{{ status_badge(inv.status) }}</td>
+            <td>
+              {% if inv.status == 'PENDING' %}
+              {# Responsive pay form #}
+              <form action="{{ url_for('mark_paid', invoice_id=inv.invoice_id) }}" method="POST" class="pay-form-row">
+                <select name="payment_method" class="form-select form-select-sm">
+                  <option>Bank Transfer</option>
+                  <option>ACH</option>
+                  <option>Wire</option>
+                  <option>Check</option>
+                </select>
+                <button type="submit" class="btn btn-sm btn-success text-nowrap">Pay Now</button>
+              </form>
+              {% else %}
+              <span class="text-muted small">✓ Complete</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center text-muted py-3">No invoices recorded.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
+  </div>
+
+  {# Invoice Breakdown Chart (NEW) #}
+  <div class="col-lg-3 mb-4">
+    <div class="glass-card h-100">
+      <h5 class="mb-3 text-white">Invoice Breakdown</h5>
+      <canvas id="financeInvChart"></canvas>
+      <div class="mt-3 text-center">
+        <p class="text-muted small mb-1">Total Invoiced: <strong class="text-white">${{ "{:,.2f}".format(data.kpi_total_invoiced) }}</strong></p>
+        <p class="text-muted small mb-1">Paid Out: <strong class="text-success">${{ "{:,.2f}".format(data.kpi_paid_amt) }}</strong></p>
+        <p class="text-muted small">Outstanding: <strong class="text-warning">${{ "{:,.2f}".format(data.kpi_total_invoiced - data.kpi_paid_amt) }}</strong></p>
+      </div>
+      <script>
+        new Chart(document.getElementById('financeInvChart').getContext('2d'), {
+          type: 'doughnut',
+          data: {
+            labels: ['Outstanding ($)', 'Paid Out ($)'],
+            datasets: [{
+              data: [{{ data.kpi_total_invoiced - data.kpi_paid_amt }}, {{ data.kpi_paid_amt }}],
+              backgroundColor: ['#f59e0b', '#059669'], borderWidth: 0
+            }]
+          },
+          options: { plugins: { legend: { labels: { color: 'white', font: { size: 11 } } } } }
+        });
+      </script>
+    </div>
+  </div>
 </div>
 
-<!-- Super Admin -->
+
+{# ═══════════════════════ SUPER ADMIN ═══════════════════════ #}
 {% elif current_user.role_name == 'SuperAdmin' %}
 <div class="row">
-    <!-- SuperAdmin KPIs -->
-    <div class="col-12 mb-4">
-        <div class="row g-3">
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Operating Departments</div>
-                    <div class="display-6 text-primary fw-bold mt-2">{{ data.kpi_depts }}</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Total Issued POs</div>
-                    <div class="display-6 text-info fw-bold mt-2">{{ data.kpi_pos }}</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="glass-card text-center p-3">
-                    <div class="text-muted text-uppercase small fw-bold tracking-wider">Recorded Audit Events</div>
-                    <div class="display-6 text-secondary fw-bold mt-2">{{ data.kpi_logs }}</div>
-                </div>
-            </div>
+  {# 4 KPI cards - now includes Pipeline Value + Total Paid Out #}
+  <div class="col-12 mb-4">
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Operating Depts</div>
+          <div class="display-5 text-primary fw-bold mt-2">{{ data.kpi_depts }}</div>
         </div>
+      </div>
+      <div class="col-md-3">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Total Issued POs</div>
+          <div class="display-5 text-info fw-bold mt-2">{{ data.kpi_pos }}</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Active Pipeline Value</div>
+          <div class="display-5 text-warning fw-bold mt-2">${{ "{:,.0f}".format(data.kpi_pipeline_value) }}</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="glass-card text-center p-3">
+          <div class="text-muted text-uppercase small fw-bold">Total Paid Out</div>
+          <div class="display-5 text-success fw-bold mt-2">${{ "{:,.0f}".format(data.kpi_total_spent) }}</div>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <div class="col-lg-4 mb-4">
-        <div class="glass-card h-100">
-            <h4 class="mb-4 text-white">Global Department Budgets</h4>
-            <canvas id="budgetChart"></canvas>
-            <script>
-                const ctx = document.getElementById('budgetChart').getContext('2d');
-                new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: [
-                            {% for dept in data.departments %} '{{ dept.dept_name }} (Used)', '{{ dept.dept_name }} (Left)', {% endfor %}
-                        ],
-                    datasets: [{
-                        data: [
-                            {% for dept in data.departments %} {{ dept.budget_used }}, {{ dept.budget_allocated - dept.budget_used }}, {% endfor %}
-                ],
-                    backgroundColor: ['rgb(239, 68, 68)', 'rgb(16, 185, 129)']
-                        }]
-                    },
-                    options: { plugins: { legend: { labels: { color: 'white' } } } }
-                });
-            </script>
-        </div>
+  {# Budget Bar Chart — FIXED from doughnut to horizontal grouped bar #}
+  <div class="col-lg-4 mb-4">
+    <div class="glass-card h-100">
+      <h4 class="mb-3 text-white">Department Budget Health</h4>
+      <canvas id="budgetChart"></canvas>
+      <script>
+        new Chart(document.getElementById('budgetChart').getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: [{% for dept in data.departments %}'{{ dept.dept_name }}',{% endfor %}],
+            datasets: [
+              {
+                label: 'Used ($)',
+                data: [{% for dept in data.departments %}{{ dept.budget_used }},{% endfor %}],
+                backgroundColor: 'rgba(239,68,68,0.85)', borderRadius: 5
+              },
+              {
+                label: 'Remaining ($)',
+                data: [{% for dept in data.departments %}{{ dept.budget_allocated - dept.budget_used }},{% endfor %}],
+                backgroundColor: 'rgba(16,185,129,0.85)', borderRadius: 5
+              }
+            ]
+          },
+          options: {
+            indexAxis: 'y', responsive: true,
+            plugins: { legend: { labels: { color: 'white', font: { size: 11 } } } },
+            scales: {
+              x: { stacked: false, ticks: { color: 'white' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+              y: { ticks: { color: 'white' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+            }
+          }
+        });
+      </script>
     </div>
-    <div class="col-lg-5 mb-4">
-        <div class="glass-card h-100" style="max-height: 500px; overflow-y: auto;">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h4 class="text-white mb-0">System Audit Log</h4>
-                <form action="{{ url_for('clear_all_logs') }}" method="POST">
-                    <button type="submit" class="btn btn-sm btn-outline-danger"
-                        onclick="return confirm('WARNING: Are you sure you want to completely erase the audit history?')">Clear
-                        All</button>
-                </form>
-            </div>
+  </div>
 
-            <div class="list-group list-group-flush bg-transparent">
-                {% for log in data.audit %}
-                <div class="list-group-item bg-transparent border-secondary ps-0 pe-0">
-                    <div class="d-flex w-100 justify-content-between align-items-start">
-                        <div>
-                            <h6 class="mb-1 text-white">{{ log.email }} : <span class="text-info">{{ log.action
-                                    }}</span></h6>
-                            <p class="mb-1 text-muted small">Target: {{ log.table_affected }} | IP: {{ log.ip_address }}
-                            </p>
-                        </div>
-                        <div class="text-end">
-                            <small class="text-muted d-block mb-1">{{ log.timestamp.strftime('%H:%M:%S') if
-                                log.timestamp is not string else log.timestamp[11:19] }}</small>
-                            <form action="{{ url_for('clear_log', log_id=log.log_id) }}" method="POST">
-                                <button type="submit"
-                                    class="btn btn-xs btn-link text-danger p-0 border-0 text-decoration-none"
-                                    style="font-size: 0.75rem;" title="Delete Entry">&#10005; Delete</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                {% else %}
-                <p class="text-muted">No logs recorded yet.</p>
-                {% endfor %}
+  {# Audit Log — FIX: shows full date+time, shows true total count #}
+  <div class="col-lg-5 mb-4">
+    <div class="glass-card h-100" style="max-height:520px;overflow-y:auto;">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="text-white mb-0">System Audit Log
+          <small class="text-muted fs-6 ms-2">({{ data.kpi_logs }} total events)</small>
+        </h4>
+        <form action="{{ url_for('clear_all_logs') }}" method="POST">
+          <button type="submit" class="btn btn-sm btn-outline-danger"
+            onclick="return confirm('WARNING: Erase ALL audit history?')">Clear All</button>
+        </form>
+      </div>
+      <div class="list-group list-group-flush bg-transparent">
+        {% for log in data.audit %}
+        <div class="list-group-item bg-transparent border-secondary ps-0 pe-0">
+          <div class="d-flex w-100 justify-content-between align-items-start">
+            <div>
+              <h6 class="mb-1 text-white">{{ log.email }} :
+                <span class="text-info">{{ log.action }}</span>
+              </h6>
+              <p class="mb-1 text-muted small">Target: {{ log.table_affected }} | IP: {{ log.ip_address }}</p>
             </div>
+            <div class="text-end flex-shrink-0 ms-3">
+              {# FIX BUG 6: Show full date + time not just HH:MM:SS #}
+              <small class="text-muted d-block mb-1">
+                {{ log.timestamp.strftime('%m-%d %H:%M:%S') if log.timestamp is not string else log.timestamp[5:19] }}
+              </small>
+              <form action="{{ url_for('clear_log', log_id=log.log_id) }}" method="POST">
+                <button type="submit" class="btn btn-xs btn-link text-danger p-0 border-0 text-decoration-none"
+                  style="font-size:0.75rem;">&#10005; Delete</button>
+              </form>
+            </div>
+          </div>
         </div>
+        {% else %}
+        <p class="text-muted">No logs recorded yet.</p>
+        {% endfor %}
+      </div>
     </div>
+  </div>
 
-    <!-- Third Column: Global PO Pipeline Chart -->
-    <div class="col-lg-3 mb-4">
-        <div class="glass-card h-100">
-            <h4 class="mb-4 text-white">Purchase Orders Flow</h4>
-            <canvas id="allPOsChart"></canvas>
-            <script>
-                const ctxPo = document.getElementById('allPOsChart').getContext('2d');
-                new Chart(ctxPo, {
-                    type: 'pie',
-                    data: {
-                        labels: [
-                            {% for po in data.all_pos %} '{{ po.status }}', {% endfor %}
-                        ],
-                    datasets: [{
-                        data: [
-                            {% for po in data.all_pos %} {{ po.count }}, {% endfor %}
-                ],
-                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444']
-                        }]
-                    },
-                    options: { plugins: { legend: { labels: { color: 'white' } } } }
-                });
-            </script>
-        </div>
+  {# PO Flow Pie Chart #}
+  <div class="col-lg-3 mb-4">
+    <div class="glass-card h-100">
+      <h4 class="mb-4 text-white">PO Pipeline Flow</h4>
+      <canvas id="allPOsChart"></canvas>
+      <script>
+        new Chart(document.getElementById('allPOsChart').getContext('2d'), {
+          type: 'pie',
+          data: {
+            labels: [{% for po in data.all_pos %}'{{ po.status }}',{% endfor %}],
+            datasets: [{
+              data: [{% for po in data.all_pos %}{{ po.count }},{% endfor %}],
+              backgroundColor: ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#059669']
+            }]
+          },
+          options: { plugins: { legend: { labels: { color: 'white', font: { size: 11 } } } } }
+        });
+      </script>
     </div>
+  </div>
 </div>
 {% endif %}
 

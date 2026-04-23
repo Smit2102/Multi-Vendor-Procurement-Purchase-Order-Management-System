@@ -184,8 +184,9 @@ def dashboard():
     if current_user.role_name == 'Employee':
         data['requests'] = conn.execute('SELECT * FROM Purchase_Requests WHERE employee_id = ? ORDER BY created_at DESC', (current_user.id,)).fetchall()
         data['kpi_total'] = len(data['requests'])
-        data['kpi_approved'] = sum(1 for r in data['requests'] if r['status'] in ('APPROVED', 'PO_ISSUED'))
+        data['kpi_approved'] = sum(1 for r in data['requests'] if r['status'] in ('APPROVED', 'PO_ISSUED', 'SHIPPED', 'INVOICED', 'PAID'))
         data['kpi_pending'] = sum(1 for r in data['requests'] if r['status'] == 'PENDING')
+        data['kpi_rejected'] = sum(1 for r in data['requests'] if r['status'] == 'REJECTED')
     
     elif current_user.role_name == 'Manager':
         data['pending_requests'] = conn.execute('''
@@ -211,7 +212,8 @@ def dashboard():
         if vendor_info:
             data['pos'] = conn.execute('SELECT * FROM Purchase_Orders WHERE vendor_id = ?', (vendor_info['vendor_id'],)).fetchall()
         data['kpi_open'] = len(data['pos'])
-        data['kpi_to_ship'] = sum(1 for p in data['pos'] if p['status'] == 'ISSUED')
+        # FIX REC 7/8: Status is 'PO_ISSUED' not 'ISSUED'
+        data['kpi_to_ship'] = sum(1 for p in data['pos'] if p['status'] == 'PO_ISSUED')
         data['kpi_value'] = sum(p['total_amount'] for p in data['pos'])
 
     elif current_user.role_name == 'Finance':
@@ -220,17 +222,17 @@ def dashboard():
         data['kpi_ready'] = len(data['deliveries'])
         data['kpi_unpaid'] = sum(1 for i in data['invoices'] if i['status'] == 'PENDING')
         data['kpi_paid_amt'] = sum(i['amount'] for i in data['invoices'] if i['status'] == 'PAID')
+        data['kpi_total_invoiced'] = sum(i['amount'] for i in data['invoices'])
 
     elif current_user.role_name == 'SuperAdmin':
         data['departments'] = conn.execute('SELECT * FROM Departments').fetchall()
-        data['audit'] = conn.execute('SELECT a.*, u.email FROM Audit_Log a JOIN Users u ON a.user_id = u.user_id ORDER BY timestamp DESC LIMIT 50').fetchall()
-        
-        # SuperAdmin extended analytics logic
-        # For simplicity, returning all POs
+        data['audit'] = conn.execute('SELECT a.*, u.email FROM Audit_Log a JOIN Users u ON a.user_id = u.user_id ORDER BY timestamp DESC LIMIT 100').fetchall()
         data['all_pos'] = conn.execute('SELECT status, COUNT(*) as count FROM Purchase_Orders GROUP BY status').fetchall()
         data['kpi_depts'] = len(data['departments'])
-        data['kpi_logs'] = sum(1 for _ in data['audit'])
+        data['kpi_logs'] = conn.execute('SELECT COUNT(*) FROM Audit_Log').fetchone()[0]
         data['kpi_pos'] = sum(p['count'] for p in data['all_pos'])
+        data['kpi_pipeline_value'] = conn.execute("SELECT COALESCE(SUM(total_amount), 0) FROM Purchase_Orders WHERE status != 'PAID'").fetchone()[0] or 0
+        data['kpi_total_spent'] = conn.execute("SELECT COALESCE(SUM(amount), 0) FROM Invoices WHERE status = 'PAID'").fetchone()[0] or 0
 
     conn.close()
     return render_template('dashboard.html', data=data)
@@ -265,16 +267,30 @@ def submit_pr():
 def approve_pr(pr_id):
     decision = request.form['decision']  # 'APPROVED' or 'REJECTED'
     comments = request.form['comments']
-    
+
     conn = get_db_connection()
+    pr = conn.execute('SELECT * FROM Purchase_Requests WHERE pr_id = ?', (pr_id,)).fetchone()
+
+    # FIX REC 1: Budget validation before approving
+    if decision == 'APPROVED' and pr:
+        dept = conn.execute('SELECT * FROM Departments WHERE dept_id = ?', (pr['dept_id'],)).fetchone()
+        request_total = pr['quantity'] * pr['estimated_cost']
+        remaining = dept['budget_allocated'] - dept['budget_used']
+        if request_total > remaining:
+            conn.close()
+            flash('Cannot approve: ${:,.0f} requested exceeds remaining budget of ${:,.0f}'.format(request_total, remaining), 'danger')
+            return redirect(url_for('dashboard'))
+
     conn.execute('UPDATE Purchase_Requests SET status = ? WHERE pr_id = ?', (decision, pr_id))
     conn.execute('INSERT INTO PR_Approvals (pr_id, manager_id, decision, comments) VALUES (?, ?, ?, ?)',
                  (pr_id, current_user.id, decision, comments))
+    # FIX REC 6: Track the PENDING → APPROVED/REJECTED transition
     conn.execute('INSERT INTO PR_Status_History (pr_id, old_status, new_status, changed_by) VALUES (?, ?, ?, ?)',
                  (pr_id, 'PENDING', decision, current_user.id))
     conn.commit()
     conn.close()
-    log_audit(current_user.id, f'{decision}_PR', 'Purchase_Requests')
+    log_audit(current_user.id, decision + '_PR', 'Purchase_Requests')
+    flash('Request ' + decision + ' successfully!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/generate_po', methods=['POST'])
@@ -283,19 +299,31 @@ def generate_po():
     pr_id = request.form['pr_id']
     vendor_id = request.form['vendor_id']
     delivery_date = request.form['delivery_date']
-    
+
     conn = get_db_connection()
     pr = conn.execute('SELECT * FROM Purchase_Requests WHERE pr_id = ?', (pr_id,)).fetchone()
     total_amt = pr['quantity'] * pr['estimated_cost']
-    
+
     conn.execute('''
         INSERT INTO Purchase_Orders (pr_id, vendor_id, procurement_officer_id, delivery_due_date, total_amount)
         VALUES (?, ?, ?, ?, ?)
     ''', (pr_id, vendor_id, current_user.id, delivery_date, total_amt))
+    conn.commit()
+    po_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+
+    # FIX REC 4: Populate PO_Line_Items — was always empty before
+    conn.execute('''
+        INSERT INTO PO_Line_Items (po_id, item_description, quantity, unit_price, total_price)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (po_id, pr['item_name'], pr['quantity'], pr['estimated_cost'], total_amt))
+
     conn.execute('UPDATE Purchase_Requests SET status = "PO_ISSUED" WHERE pr_id = ?', (pr_id,))
+    # FIX REC 6: Track APPROVED → PO_ISSUED transition
+    conn.execute('INSERT INTO PR_Status_History (pr_id, old_status, new_status, changed_by) VALUES (?, ?, ?, ?)',
+                 (pr_id, 'APPROVED', 'PO_ISSUED', current_user.id))
     conn.commit()
     conn.close()
-    
+
     log_audit(current_user.id, 'GENERATE_PO', 'Purchase_Orders')
     flash('Purchase Order Generated successfully!', 'success')
     return redirect(url_for('dashboard'))
@@ -304,12 +332,25 @@ def generate_po():
 @login_required
 def vendor_ship(po_id):
     conn = get_db_connection()
+    po = conn.execute('''
+        SELECT po.*, pr.quantity, pr.pr_id as linked_pr_id FROM Purchase_Orders po
+        JOIN Purchase_Requests pr ON po.pr_id = pr.pr_id
+        WHERE po.po_id = ?
+    ''', (po_id,)).fetchone()
+    quantity = po['quantity'] if po else 0
     conn.execute('UPDATE Purchase_Orders SET status = "SHIPPED" WHERE po_id = ?', (po_id,))
-    conn.execute('INSERT INTO Goods_Receipt (po_id, received_by, quantity_received, condition_notes) VALUES (?, ?, 0, "Shipped by Vendor")', (po_id, current_user.id))
+    conn.execute(
+        'INSERT INTO Goods_Receipt (po_id, received_by, quantity_received, condition_notes) VALUES (?, ?, ?, ?)',
+        (po_id, current_user.id, quantity, 'Goods received in good condition')
+    )
+    # FIX REC 6: Track PO_ISSUED → SHIPPED transition
+    if po:
+        conn.execute('INSERT INTO PR_Status_History (pr_id, old_status, new_status, changed_by) VALUES (?, ?, ?, ?)',
+                     (po['linked_pr_id'], 'PO_ISSUED', 'SHIPPED', current_user.id))
     conn.commit()
     conn.close()
     log_audit(current_user.id, 'MARK_SHIPPED', 'Purchase_Orders')
-    flash('Marked as Shipped!', 'success')
+    flash('Order marked as Shipped!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/finance_invoice', methods=['POST'])
@@ -317,14 +358,52 @@ def vendor_ship(po_id):
 def finance_invoice():
     po_id = request.form['po_id']
     conn = get_db_connection()
-    po = conn.execute('SELECT * FROM Purchase_Orders WHERE po_id = ?', (po_id,)).fetchone()
+    # FIX BUG 1: JOIN to get dept_id so we can update the department budget
+    po = conn.execute('''
+        SELECT po.*, pr.dept_id FROM Purchase_Orders po
+        JOIN Purchase_Requests pr ON po.pr_id = pr.pr_id
+        WHERE po.po_id = ?
+    ''', (po_id,)).fetchone()
+    total_amount = po['total_amount']
+    dept_id = po['dept_id']
+
     conn.execute('INSERT INTO Invoices (po_id, vendor_id, due_date, amount) VALUES (?, ?, ?, ?)',
-                 (po_id, po['vendor_id'], po['delivery_due_date'], po['total_amount']))
+                 (po_id, po['vendor_id'], po['delivery_due_date'], total_amount))
+    conn.commit()
     conn.execute('UPDATE Purchase_Orders SET status = "INVOICED" WHERE po_id = ?', (po_id,))
+    # FIX BUG 1: Deduct from the department budget
+    conn.execute('UPDATE Departments SET budget_used = budget_used + ? WHERE dept_id = ?', (total_amount, dept_id))
+    # FIX BUG 1: Record the budget transaction
+    conn.execute('INSERT INTO Budget_Transactions (dept_id, po_id, amount, transaction_type) VALUES (?, ?, ?, ?)',
+                 (dept_id, po_id, total_amount, 'INVOICE'))
     conn.commit()
     conn.close()
     log_audit(current_user.id, 'CREATE_INVOICE', 'Invoices')
-    flash('Invoice Processed successfully!', 'success')
+    flash('Invoice processed and department budget updated!', 'success')
+    return redirect(url_for('dashboard'))
+
+@app.route('/mark_paid/<int:invoice_id>', methods=['POST'])
+@login_required
+def mark_paid(invoice_id):
+    # FIX BUG 2: The missing PAID route — complete the payment lifecycle
+    if current_user.role_name != 'Finance':
+        return redirect(url_for('dashboard'))
+    import uuid
+    payment_method = request.form.get('payment_method', 'Bank Transfer')
+    reference = 'PAY-' + str(uuid.uuid4())[:8].upper()
+    conn = get_db_connection()
+    inv = conn.execute('SELECT * FROM Invoices WHERE invoice_id = ?', (invoice_id,)).fetchone()
+    if inv and inv['status'] == 'PENDING':
+        conn.execute('UPDATE Invoices SET status = "PAID" WHERE invoice_id = ?', (invoice_id,))
+        conn.execute('''
+            INSERT INTO Payments (invoice_id, paid_by, amount_paid, payment_method, reference_no)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (invoice_id, current_user.id, inv['amount'], payment_method, reference))
+        conn.commit()
+        log_audit(current_user.id, 'MARK_PAID', 'Payments')
+        paid_amt = inv['amount']
+        flash('Payment of $' + '{:,.2f}'.format(paid_amt) + ' processed! Ref: ' + reference, 'success')
+    conn.close()
     return redirect(url_for('dashboard'))
 
 @app.route('/clear_log/<int:log_id>', methods=['POST'])
