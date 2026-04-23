@@ -69,7 +69,8 @@ This system digitizes and streamlines this entire pipeline with role-based acces
 
 We have recently completed a major update to perfectly simulate real-world conditions:
 - **Strict Budget Constraints**: Managers are now blocked from approving requests if the department doesn't have sufficient remaining budget.
-- **Flawless State Machine**: `PR_Status_History` is now updated correctly on all 5 state transitions of the workflow (Pending → Approved → PO Issued → Shipped → Invoiced → Paid).
+- **Flawless State Machine**: `PR_Status_History` is now updated correctly on all 5 state transitions of the workflow (Pending → Approved → PO Issued → Shipped → Invoiced → Paid). Furthermore, advanced workflow events (like Vendor Shipping or Finance Payments) dynamically cascade backwards to seamlessly update the original Employee Request status.
+- **Historical Data Synchronization**: Formulated and executed a full database sync script via PostgreSQL that retroactively applies new budget and routing constraints to all organically generated historical data.
 - **Correct Stock Receiving**: The Goods Receipt logic was fixed to pull the actual requested quantity from the linked Purchase Request dynamically during receiving.
 - **Accurate Audit Counters**: The Admin audit log now correctly summarizes the *true* total number of events instead of maxing out at API limits.
 - **Perfectly Responsive UI**: Re-engineered all components using fluid `clamp()` functions, flexbox row wrapping (`po-form-row`, `pay-form-row`), and mobile-responsive scrollable tables. Fully tested across 992px, 768px, and 480px breakpoints.
