@@ -280,6 +280,11 @@ def approve_pr(pr_id):
             conn.close()
             flash('Cannot approve: ${:,.0f} requested exceeds remaining budget of ${:,.0f}'.format(request_total, remaining), 'danger')
             return redirect(url_for('dashboard'))
+            
+        # BUG FIX: Budget should be encumbered immediately upon Manager approval, not at invoice time
+        conn.execute('UPDATE Departments SET budget_used = budget_used + ? WHERE dept_id = ?', (request_total, pr['dept_id']))
+        conn.execute('INSERT INTO Budget_Transactions (dept_id, po_id, amount, transaction_type) VALUES (?, NULL, ?, ?)',
+                     (pr['dept_id'], request_total, 'ENCUMBRANCE'))
 
     conn.execute('UPDATE Purchase_Requests SET status = ? WHERE pr_id = ?', (decision, pr_id))
     conn.execute('INSERT INTO PR_Approvals (pr_id, manager_id, decision, comments) VALUES (?, ?, ?, ?)',
@@ -371,11 +376,9 @@ def finance_invoice():
                  (po_id, po['vendor_id'], po['delivery_due_date'], total_amount))
     conn.commit()
     conn.execute('UPDATE Purchase_Orders SET status = "INVOICED" WHERE po_id = ?', (po_id,))
-    # FIX BUG 1: Deduct from the department budget
-    conn.execute('UPDATE Departments SET budget_used = budget_used + ? WHERE dept_id = ?', (total_amount, dept_id))
-    # FIX BUG 1: Record the budget transaction
+    # Record that the invoice was generated, but budget was already deducted during manager approval
     conn.execute('INSERT INTO Budget_Transactions (dept_id, po_id, amount, transaction_type) VALUES (?, ?, ?, ?)',
-                 (dept_id, po_id, total_amount, 'INVOICE'))
+                 (dept_id, po_id, total_amount, 'INVOICE_PROCESSED'))
     conn.commit()
     conn.close()
     log_audit(current_user.id, 'CREATE_INVOICE', 'Invoices')
