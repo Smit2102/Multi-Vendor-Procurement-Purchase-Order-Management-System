@@ -201,7 +201,8 @@ def dashboard():
     elif current_user.role_name == 'Procurement':
         data['approved_requests'] = conn.execute('SELECT * FROM Purchase_Requests WHERE status = "APPROVED"').fetchall()
         data['vendors'] = conn.execute("SELECT * FROM Vendors WHERE is_active = TRUE").fetchall()
-        data['pos'] = conn.execute('SELECT po.*, v.company_name FROM Purchase_Orders po JOIN Vendors v ON po.vendor_id = v.vendor_id').fetchall()
+        # FIX: Exclude PAID from the active pipeline table
+        data['pos'] = conn.execute('SELECT po.*, v.company_name FROM Purchase_Orders po JOIN Vendors v ON po.vendor_id = v.vendor_id WHERE po.status != "PAID"').fetchall()
         data['kpi_to_issue'] = len(data['approved_requests'])
         data['kpi_active'] = len(data['pos'])
         data['kpi_value'] = sum(p['total_amount'] for p in data['pos'])
@@ -344,6 +345,11 @@ def vendor_ship(po_id):
     ''', (po_id,)).fetchone()
     quantity = po['quantity'] if po else 0
     conn.execute('UPDATE Purchase_Orders SET status = "SHIPPED" WHERE po_id = ?', (po_id,))
+    
+    # FIX: Cascade status backward to Employee's Request
+    if po:
+        conn.execute('UPDATE Purchase_Requests SET status = "SHIPPED" WHERE pr_id = ?', (po['linked_pr_id'],))
+        
     conn.execute(
         'INSERT INTO Goods_Receipt (po_id, received_by, quantity_received, condition_notes) VALUES (?, ?, ?, ?)',
         (po_id, current_user.id, quantity, 'Goods received in good condition')
@@ -363,9 +369,8 @@ def vendor_ship(po_id):
 def finance_invoice():
     po_id = request.form['po_id']
     conn = get_db_connection()
-    # FIX BUG 1: JOIN to get dept_id so we can update the department budget
     po = conn.execute('''
-        SELECT po.*, pr.dept_id FROM Purchase_Orders po
+        SELECT po.*, pr.dept_id, pr.pr_id as linked_pr_id FROM Purchase_Orders po
         JOIN Purchase_Requests pr ON po.pr_id = pr.pr_id
         WHERE po.po_id = ?
     ''', (po_id,)).fetchone()
@@ -374,38 +379,58 @@ def finance_invoice():
 
     conn.execute('INSERT INTO Invoices (po_id, vendor_id, due_date, amount) VALUES (?, ?, ?, ?)',
                  (po_id, po['vendor_id'], po['delivery_due_date'], total_amount))
-    conn.commit()
+                 
     conn.execute('UPDATE Purchase_Orders SET status = "INVOICED" WHERE po_id = ?', (po_id,))
+    
+    # FIX: Cascade status backward to Employee's Request
+    if po:
+        conn.execute('UPDATE Purchase_Requests SET status = "INVOICED" WHERE pr_id = ?', (po['linked_pr_id'],))
+        conn.execute('INSERT INTO PR_Status_History (pr_id, old_status, new_status, changed_by) VALUES (?, ?, ?, ?)',
+                     (po['linked_pr_id'], 'SHIPPED', 'INVOICED', current_user.id))
+                     
     # Record that the invoice was generated, but budget was already deducted during manager approval
     conn.execute('INSERT INTO Budget_Transactions (dept_id, po_id, amount, transaction_type) VALUES (?, ?, ?, ?)',
                  (dept_id, po_id, total_amount, 'INVOICE_PROCESSED'))
     conn.commit()
     conn.close()
     log_audit(current_user.id, 'CREATE_INVOICE', 'Invoices')
-    flash('Invoice processed and department budget updated!', 'success')
+    flash('Invoice processed and routed for payment!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/mark_paid/<int:invoice_id>', methods=['POST'])
 @login_required
 def mark_paid(invoice_id):
-    # FIX BUG 2: The missing PAID route — complete the payment lifecycle
     if current_user.role_name != 'Finance':
         return redirect(url_for('dashboard'))
     import uuid
     payment_method = request.form.get('payment_method', 'Bank Transfer')
     reference = 'PAY-' + str(uuid.uuid4())[:8].upper()
     conn = get_db_connection()
-    inv = conn.execute('SELECT * FROM Invoices WHERE invoice_id = ?', (invoice_id,)).fetchone()
+    
+    inv = conn.execute('''
+        SELECT i.*, po.pr_id as linked_pr_id
+        FROM Invoices i
+        JOIN Purchase_Orders po ON i.po_id = po.po_id
+        WHERE i.invoice_id = ?
+    ''', (invoice_id,)).fetchone()
+    
     if inv and inv['status'] == 'PENDING':
         conn.execute('UPDATE Invoices SET status = "PAID" WHERE invoice_id = ?', (invoice_id,))
+        
+        # FIX: Cascade status backward to BOTH Purchase_Orders and Purchase_Requests
+        conn.execute('UPDATE Purchase_Orders SET status = "PAID" WHERE po_id = ?', (inv['po_id'],))
+        conn.execute('UPDATE Purchase_Requests SET status = "PAID" WHERE pr_id = ?', (inv['linked_pr_id'],))
+        conn.execute('INSERT INTO PR_Status_History (pr_id, old_status, new_status, changed_by) VALUES (?, ?, ?, ?)',
+                     (inv['linked_pr_id'], 'INVOICED', 'PAID', current_user.id))
+                     
         conn.execute('''
             INSERT INTO Payments (invoice_id, paid_by, amount_paid, payment_method, reference_no)
             VALUES (?, ?, ?, ?, ?)
         ''', (invoice_id, current_user.id, inv['amount'], payment_method, reference))
         conn.commit()
-        log_audit(current_user.id, 'MARK_PAID', 'Payments')
-        paid_amt = inv['amount']
-        flash('Payment of $' + '{:,.2f}'.format(paid_amt) + ' processed! Ref: ' + reference, 'success')
+        log_audit(current_user.id, 'MARK_PAID', 'Invoices')
+        flash(f'Payment {reference} successfully issued!', 'success')
+    
     conn.close()
     return redirect(url_for('dashboard'))
 
