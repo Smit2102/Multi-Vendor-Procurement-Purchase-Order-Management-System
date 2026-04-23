@@ -337,6 +337,12 @@ erDiagram
     Users ||--o{ Audit_Log : "generates"
     Users ||--o{ Notifications : "receives"
     Users ||--o{ Saved_Reports : "creates"
+    Users ||--o{ PR_Approvals : "decides"
+    Users ||--o{ PR_Status_History : "changes"
+    Users ||--o{ Purchase_Orders : "issues"
+    Users ||--o{ Goods_Receipt : "inspects"
+    Users ||--o{ Payments : "authorizes"
+    Users ||--o{ Departments : "manages"
     Departments ||--o{ Purchase_Requests : "belongs to"
     Purchase_Requests ||--o{ PR_Approvals : "reviewed in"
     Purchase_Requests ||--o{ PR_Status_History : "tracked in"
@@ -600,6 +606,12 @@ flowchart LR
     Users -->|user_id| Audit_Log
     Users -->|user_id| Notifications
     Users -->|user_id| Saved_Reports
+    Users -->|manager_id| PR_Approvals
+    Users -->|changed_by| PR_Status_History
+    Users -->|procurement_officer_id| Purchase_Orders
+    Users -->|received_by| Goods_Receipt
+    Users -->|paid_by| Payments
+    Users -->|manager_id| Departments
     Departments -->|dept_id| Purchase_Requests
     Purchase_Requests -->|pr_id| PR_Approvals
     Purchase_Requests -->|pr_id| PR_Status_History
