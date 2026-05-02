@@ -1464,8 +1464,8 @@ Design Language ........... Dark theme, Glassmorphism, CSS animations
 
 ## 👨‍💻 Author
 
-**Nisarg Shah**
-- GitHub: [@nisarg-007](https://github.com/nisarg-007)
+**Smit Patel**
+- GitHub: [@Smit2102](https://github.com/Smit2102)
 - Course: Database Management (DBMT) — Semester 2
 
 ---
